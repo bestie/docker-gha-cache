@@ -19,6 +19,13 @@ inputs:
     description: Dockerfile path
     required: false
     default: Dockerfile
+  load:
+    description: >
+      Load into the local daemon so the image is immediately useable in the same job.
+      This is not the recommended pattern but is annoying gotcha.
+      Disable for best performance.
+    required: false
+    default: "true"
   buildx-args:
     description: >
       Arbitrary arguments appended to the docker buildx build command,
@@ -86,11 +93,16 @@ runs:
       run: |
         mkdir -p $(dirname ${{ steps.init.outputs.path }})
 
+        local_output=""
+        if [ "${{ inputs.load }}" == "true" ]; then
+          local_output='--output "type=docker"'
+        fi
+
         docker buildx build \
           --file "${{ inputs.file }}" \
           --tag "${{ inputs.tag }}" \
           --platform "${{ inputs.platform }}" \
-          --output "type=docker,dest=${{ steps.init.outputs.path }}" \
+          --output "type=docker,dest=${{ steps.init.outputs.path }}" $local_output \
           ${{ inputs.buildx-args }} \
           "${{ inputs.context }}"
 

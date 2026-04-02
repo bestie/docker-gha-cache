@@ -168,3 +168,46 @@ jobs:
         run: |
           docker run --rm ${{ env.TAG }} echo "custom path works" | grep "custom path works"
           echo "custom key/path ✓"
+
+  test-single-job-build:
+    name: "Single job inline use"
+    runs-on: ubuntu-latest
+    env:
+      TAG: test-single-job:${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v4
+ 
+      - name: Build image (cache empty)
+        id: build
+        uses: ./build
+        with:
+          tag: ${{ env.TAG }}
+          file: tests/Dockerfile
+ 
+      - name: Assert cache miss
+        run: |
+          if [ "${{ steps.build.outputs.cache-hit }}" == "false" ]; then
+            echo "Expected cache-hit=true on second use, got false"
+            exit 1
+          fi
+          echo "cache-hit=false ✓"
+
+      - name: Assert image is loaded and runnable
+        run: |
+          docker run --rm ${{ env.TAG }} echo "hello" | grep "hello"
+          echo "image loaded from cache and runs correctly ✓"
+
+  test-single-job-cache-check:
+    needs: ["test-single-job-build"]
+    name: "Single job cache check"
+    runs-on: ubuntu-latest
+    env:
+      TAG: test-single-job:${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v4
+ 
+      - name: Check image is cached by restoring it
+        uses: ./restore
+        with:
+          tag: ${{ env.TAG }}
+          file: tests/Dockerfile
