@@ -1,0 +1,102 @@
+name: docker-image-cache/build
+description: Cache docker images as tar files
+
+inputs:
+  tag:
+    description: Docker image tag
+    required: true
+  key:
+    description: Cache key, see actions/cache
+    required: false
+  path:
+    description: Cache path, see actions/cache
+    required: false
+  platform:
+    description: Docker build platform
+    required: false
+    default: linux/amd64
+  file:
+    description: Dockerfile path
+    required: false
+    default: Dockerfile
+  buildx-args:
+    description: >
+      Arbitrary arguments appended to the docker buildx build command,
+      e.g. '--build-arg FOO=bar --secret id=mysecret,src=secret.txt'
+    required: false
+  context:
+    description: Docker build context
+    required: false
+    default: .
+
+outputs:
+  cache-hit:
+    description: If image was present in cache, see actions/cache.
+    value: ${{ steps.cache-check.outputs.cache-hit }}
+  path:
+    description: Cache path used for the image tar file.
+    value: ${{ steps.init.outputs.path }}
+  key:
+    description: Cache key used for the image tar file.
+    value: ${{ steps.init.outputs.key }}
+
+runs:
+  using: composite
+  steps:
+    - name: Prepare
+      id: init
+      shell: bash
+      run: |
+        default_key="${{ inputs.tag }}-${{ inputs.platform }}-${{ hashFiles(inputs.file) }}"
+        input_key="${{ inputs.key }}"
+        key=${input_key:-$default_key}
+
+        default_path="/tmp/$key.tar"
+        input_path="${{ inputs.path }}"
+        path=${input_path:-$default_path}
+
+        echo "key=$key" >> $GITHUB_OUTPUT
+        echo "path=$path" >> $GITHUB_OUTPUT
+
+    - name: Check Docker image cache
+      uses: actions/cache@v5
+      id: cache-check
+      with:
+        path: ${{ steps.init.outputs.path }}
+        key: ${{ steps.init.outputs.key }}
+        lookup-only: true
+
+    # QEMU is only needed when building for a platform different from the runner's native arch
+    - name: Set up QEMU
+      if: steps.cache-check.outputs.cache-hit != 'true' && (
+        (inputs.platform == 'linux/amd64' && runner.arch != 'X64') ||
+        (inputs.platform == 'linux/arm64' && runner.arch != 'ARM64')
+        )
+      uses: docker/setup-qemu-action@v4
+      with:
+        platforms: ${{ inputs.platform }}
+
+    - name: Set up Docker Buildx
+      if: steps.cache-check.outputs.cache-hit != 'true'
+      uses: docker/setup-buildx-action@v4
+
+    - name: Build Docker image
+      shell: bash
+      if: steps.cache-check.outputs.cache-hit != 'true'
+      run: |
+        mkdir -p $(dirname ${{ steps.init.outputs.path }})
+
+        docker buildx build \
+          --file "${{ inputs.file }}" \
+          --tag "${{ inputs.tag }}" \
+          --platform "${{ inputs.platform }}" \
+          --output "type=docker,dest=${{ steps.init.outputs.path }}" \
+          ${{ inputs.buildx-args }} \
+          "${{ inputs.context }}"
+
+    - name: Save Docker image to cache
+      if: steps.cache-check.outputs.cache-hit != 'true'
+      uses: actions/cache@v5
+      with:
+        path: ${{ steps.init.outputs.path }}
+        key: ${{ steps.init.outputs.key }}

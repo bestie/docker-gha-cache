@@ -1,0 +1,142 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  # ── Test 1: build populates the cache ────────────────────────────────────────
+  test-build:
+    name: Build and cache image
+    runs-on: ubuntu-latest
+    outputs:
+      cache-hit: ${{ steps.build.outputs.cache-hit }}
+      key: ${{ steps.build.outputs.key }}
+      path: ${{ steps.build.outputs.path }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        id: build
+        uses: ./build
+        with:
+          tag: test-image:latest
+          file: tests/Dockerfile
+
+      - name: Assert cache-hit is false on first build
+        run: |
+          if [ "${{ steps.build.outputs.cache-hit }}" = "true" ]; then
+            echo "Expected cache-hit=false on a fresh build, got true"
+            exit 1
+          fi
+          echo "cache-hit=false ✓"
+
+      - name: Assert outputs are populated
+        run: |
+          [ -n "${{ steps.build.outputs.key }}" ]  || (echo "key output is empty"  && exit 1)
+          [ -n "${{ steps.build.outputs.path }}" ] || (echo "path output is empty" && exit 1)
+          echo "key=${{ steps.build.outputs.key }} ✓"
+          echo "path=${{ steps.build.outputs.path }} ✓"
+
+  # ── Test 2: restore loads the image built above ───────────────────────────────
+  test-restore:
+    name: Restore cached image
+    needs: test-build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore image
+        id: restore
+        uses: ./restore
+        with:
+          tag: test-image:latest
+          file: tests/Dockerfile
+
+      - name: Assert cache-hit is true
+        run: |
+          if [ "${{ steps.restore.outputs.cache-hit }}" != "true" ]; then
+            echo "Expected cache-hit=true after build job, got false"
+            exit 1
+          fi
+          echo "cache-hit=true ✓"
+
+      - name: Assert image is loaded and runnable
+        run: |
+          docker run --rm test-image:latest echo "hello from cache" | grep "hello from cache"
+          echo "image runs correctly ✓"
+
+  # ── Test 3: rebuild is skipped when cache already exists ─────────────────────
+  test-build-cache-hit:
+    name: Build skipped on cache hit
+    needs: test-build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image (should hit cache)
+        id: build
+        uses: ./build
+        with:
+          tag: test-image:latest
+          file: tests/Dockerfile
+
+      - name: Assert cache-hit is true
+        run: |
+          if [ "${{ steps.build.outputs.cache-hit }}" != "true" ]; then
+            echo "Expected cache-hit=true on repeated build, got false"
+            exit 1
+          fi
+          echo "cache-hit=true on repeat build ✓"
+
+  # ── Test 4: buildx-args are passed through correctly ─────────────────────────
+  test-buildx-args:
+    name: Build with buildx-args
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image with build arg
+        id: build
+        uses: ./build
+        with:
+          tag: test-image-args:latest
+          file: tests/Dockerfile.args
+          key: test-image-args-${{ github.run_id }}
+          buildx-args: --build-arg GREETING=hello
+
+      - name: Assert build arg was applied
+        run: |
+          result=$(docker run --rm test-image-args:latest)
+          echo "Container output: $result"
+          echo "$result" | grep "hello" || (echo "Expected 'hello' in output" && exit 1)
+          echo "buildx-args passed through correctly ✓"
+
+  # ── Test 5: custom key and path ───────────────────────────────────────────────
+  test-custom-key-path:
+    name: Build and restore with custom key and path
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build with custom key and path
+        uses: ./build
+        with:
+          tag: test-image-custom:latest
+          file: tests/Dockerfile
+          key: custom-key-${{ github.run_id }}
+          path: /tmp/custom-location.tar
+
+      - name: Restore with matching custom key and path
+        id: restore
+        uses: ./restore
+        with:
+          tag: test-image-custom:latest
+          key: custom-key-${{ github.run_id }}
+          path: /tmp/custom-location.tar
+
+      - name: Assert restored correctly
+        run: |
+          docker run --rm test-image-custom:latest echo "custom path works" | grep "custom path works"
+          echo "custom key/path ✓"
