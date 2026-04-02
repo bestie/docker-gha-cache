@@ -1,3 +1,4 @@
 FROM alpine:3.19
-ARG GREETING=world
-CMD ["/bin/sh", "-c", "echo $GREETING"]
+ARG GREETING=hello
+RUN echo "${GREETING}" > greeting.txt
+CMD ["/bin/sh", "-c", "cat greeting.txt"]

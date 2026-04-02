@@ -6,10 +6,11 @@ on:
   pull_request:
 
 jobs:
-  # ── Test 1: build populates the cache ────────────────────────────────────────
   test-build:
     name: Build and cache image
     runs-on: ubuntu-latest
+    env:
+      TAG: test-image:${{ github.run_id }}
     outputs:
       cache-hit: ${{ steps.build.outputs.cache-hit }}
       key: ${{ steps.build.outputs.key }}
@@ -21,7 +22,7 @@ jobs:
         id: build
         uses: ./build
         with:
-          tag: test-image:latest
+          tag: ${{ env.TAG }}
           file: tests/Dockerfile
 
       - name: Assert cache-hit is false on first build
@@ -39,11 +40,12 @@ jobs:
           echo "key=${{ steps.build.outputs.key }} ✓"
           echo "path=${{ steps.build.outputs.path }} ✓"
 
-  # ── Test 2: restore loads the image built above ───────────────────────────────
   test-restore:
     name: Restore cached image
     needs: test-build
     runs-on: ubuntu-latest
+    env:
+      TAG: test-image:${{ github.run_id }}
     steps:
       - uses: actions/checkout@v4
 
@@ -51,7 +53,7 @@ jobs:
         id: restore
         uses: ./restore
         with:
-          tag: test-image:latest
+          tag: ${{ env.TAG }}
           file: tests/Dockerfile
 
       - name: Assert cache-hit is true
@@ -64,14 +66,15 @@ jobs:
 
       - name: Assert image is loaded and runnable
         run: |
-          docker run --rm test-image:latest echo "hello from cache" | grep "hello from cache"
+          docker run --rm ${{ env.TAG }} echo "hello from cache" | grep "hello from cache"
           echo "image runs correctly ✓"
 
-  # ── Test 3: rebuild is skipped when cache already exists ─────────────────────
   test-build-cache-hit:
     name: Build skipped on cache hit
     needs: test-build
     runs-on: ubuntu-latest
+    env:
+      TAG: test-image:${{ github.run_id }}
     steps:
       - uses: actions/checkout@v4
 
@@ -79,7 +82,7 @@ jobs:
         id: build
         uses: ./build
         with:
-          tag: test-image:latest
+          tag: ${{ env.TAG }}
           file: tests/Dockerfile
 
       - name: Assert cache-hit is true
@@ -90,10 +93,11 @@ jobs:
           fi
           echo "cache-hit=true on repeat build ✓"
 
-  # ── Test 4: buildx-args are passed through correctly ─────────────────────────
-  test-buildx-args:
+  test-buildx-args-build:
     name: Build with buildx-args
     runs-on: ubuntu-latest
+    env:
+      TAG: test-image-args:${{ github.run_id }}
     steps:
       - uses: actions/checkout@v4
 
@@ -101,42 +105,66 @@ jobs:
         id: build
         uses: ./build
         with:
-          tag: test-image-args:latest
+          tag: ${{ env.TAG }}
           file: tests/Dockerfile.args
-          key: test-image-args-${{ github.run_id }}
-          buildx-args: --build-arg GREETING=hello
+          buildx-args: --build-arg GREETING=ahoyhoy
+
+  test-buildx-args-restore:
+    name: Restore with and check buildx-args
+    needs: ["test-buildx-args-build"]
+    runs-on: ubuntu-latest
+    env:
+      TAG: test-image-args:${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore image
+        id: restore
+        uses: ./restore
+        with:
+          tag: ${{ env.TAG }}
+          file: tests/Dockerfile.args
 
       - name: Assert build arg was applied
         run: |
-          result=$(docker run --rm test-image-args:latest)
+          result=$(docker run --rm ${{ env.TAG }})
           echo "Container output: $result"
-          echo "$result" | grep "hello" || (echo "Expected 'hello' in output" && exit 1)
+          echo "$result" | grep "ahoyhoy" || (echo "Expected 'ahoyhoy' in output" && exit 1)
           echo "buildx-args passed through correctly ✓"
 
-  # ── Test 5: custom key and path ───────────────────────────────────────────────
-  test-custom-key-path:
+  test-custom-key-path-build:
     name: Build and restore with custom key and path
     runs-on: ubuntu-latest
+    env:
+      TAG: test-image-custom:${{ github.run_id }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Build with custom key and path
         uses: ./build
         with:
-          tag: test-image-custom:latest
-          file: tests/Dockerfile
+          tag: ${{ env.TAG }}
           key: custom-key-${{ github.run_id }}
+          file: tests/Dockerfile
           path: /tmp/custom-location.tar
+
+  test-custom-key-path-restore:
+    needs: ["test-custom-key-path-build"]
+    name: Build and restore with custom key and path
+    runs-on: ubuntu-latest
+    env:
+      TAG: test-image-custom:${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v4
 
       - name: Restore with matching custom key and path
         id: restore
         uses: ./restore
         with:
-          tag: test-image-custom:latest
+          tag: ${{ env.TAG }}
           key: custom-key-${{ github.run_id }}
           path: /tmp/custom-location.tar
 
       - name: Assert restored correctly
         run: |
-          docker run --rm test-image-custom:latest echo "custom path works" | grep "custom path works"
+          docker run --rm ${{ env.TAG }} echo "custom path works" | grep "custom path works"
           echo "custom key/path ✓"
