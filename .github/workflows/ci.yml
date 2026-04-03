@@ -16,7 +16,7 @@ jobs:
       key: ${{ steps.build.outputs.key }}
       path: ${{ steps.build.outputs.path }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Build image
         id: build
@@ -47,7 +47,7 @@ jobs:
     env:
       TAG: test-image:${{ github.run_id }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Restore image
         id: restore
@@ -76,7 +76,7 @@ jobs:
     env:
       TAG: test-image:${{ github.run_id }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Build image (should hit cache)
         id: build
@@ -99,7 +99,7 @@ jobs:
     env:
       TAG: test-image-args:${{ github.run_id }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Build image with build arg
         id: build
@@ -116,7 +116,7 @@ jobs:
     env:
       TAG: test-image-args:${{ github.run_id }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Restore image
         id: restore
         uses: ./restore
@@ -137,7 +137,7 @@ jobs:
     env:
       TAG: test-image-custom:${{ github.run_id }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Build with custom key and path
         uses: ./build
@@ -154,7 +154,7 @@ jobs:
     env:
       TAG: test-image-custom:${{ github.run_id }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Restore with matching custom key and path
         id: restore
@@ -175,7 +175,7 @@ jobs:
     env:
       TAG: test-single-job:${{ github.run_id }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
  
       - name: Build image (cache empty)
         id: build
@@ -204,7 +204,7 @@ jobs:
     env:
       TAG: test-single-job:${{ github.run_id }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
  
       - name: Check image is cached by restoring it
         uses: ./restore
