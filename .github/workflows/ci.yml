@@ -24,6 +24,7 @@ jobs:
         with:
           tag: ${{ env.TAG }}
           file: tests/Dockerfile
+          load: false
 
       - name: Assert cache-hit is false on first build
         run: |
@@ -39,6 +40,11 @@ jobs:
           [ -n "${{ steps.build.outputs.path }}" ] || (echo "path output is empty" && exit 1)
           echo "key=${{ steps.build.outputs.key }} ✓"
           echo "path=${{ steps.build.outputs.path }} ✓"
+
+      - name: Assert image is not loaded
+        run: |
+          docker image ls
+          docker image ls | grep test-image | wc -l | xargs test 0 -eq
 
   test-restore:
     name: Restore cached image
