@@ -24,7 +24,29 @@ Split into two actions, build and restore, to allow for fast, skippable, paralle
 
 ## Usage
 
-### Recommended Multi-job
+### Basic Single Job setup
+
+```yaml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build or load from cache
+        uses: bestie/docker-gha-cache/build@v1
+        with:
+          tag: myapp:latest
+
+      - name: Compile
+        run: docker run myapp:latest -v $(pwd):/workdir make
+```
+
+### Recommended Multi-Job
+
+Build one or more Docker images in separate, parallelizable jobs.
+
+Dependent jobs use restore to load the image.
 
 ```yaml
 jobs:
@@ -32,25 +54,51 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: bestie/docker-gha-cache/build@v1
+      - name: Build and cache (skips on cache hit)
+        uses: bestie/docker-gha-cache/build@v1
         with:
           tag: myapp:latest
+          load: false
+
+  lint:
+    needs: build-docker-image
+    # ...
 
   compile:
     needs: build-docker-image
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
-      - uses: bestie/docker-gha-cache/restore@v1
+
+      - name: Load Docker image 
+        uses: bestie/docker-gha-cache/restore@v1
         with:
           tag: myapp:latest
-      - run: docker run myapp:latest -v $(pwd):/workdir make
+
+      - name: Compile
+        run: docker run myapp:latest -v $(pwd):/workdir make
+
+  test:
+    needs: build-docker-image
+    # ...
 ```
 
-### Passing extra build arguments
+### Passing arbitrary arguments to `docker build`
 
-The build action runs `docker buildx build`, to pass an arbitrary command line option through add it to buildx-args.
+buildx-args is a string or list of strings that is appended as arguments to the `docker buildx build` command ran by the build action.
 
+This should allow most aspects of the build to be customized.
+
+Add secrets:
+```yaml
+- uses: bestie/docker-gha-cache/build@v1
+  with:
+    tag: myapp:latest
+    buildx-args: --secret id=npmrc,src=$HOME/.npmrc
+```
+
+Build args:
 ```yaml
 - uses: bestie/docker-gha-cache/build@v1
   with:
@@ -58,13 +106,6 @@ The build action runs `docker buildx build`, to pass an arbitrary command line o
     buildx-args: |
       --build-arg NODE_ENV=production
       --build-arg APP_VERSION=${{ github.sha }}
-```
-
-```yaml
-- uses: bestie/docker-gha-cache/build@v1
-  with:
-    tag: myapp:latest
-    buildx-args: --secret id=npmrc,src=$HOME/.npmrc
 ```
 
 ### Cross-platform builds
@@ -99,15 +140,17 @@ For finer control over what triggers a rebuild, define your own cache key.
 
 ### `build`
 
-| Input | Required | Default | Description |
-|---|---|---|---|
-| `tag` | ✅ | | Docker image tag |
-| `file` | | `Dockerfile` | Path to the Dockerfile |
-| `context` | | `.` | Docker build context |
-| `platform` | | `linux/amd64` | Target platform |
-| `buildx-args` | | | Additional arguments appended to `docker buildx build` |
+| Input         | Required  | Default           | Description |
+|-------------- |-----------|-------------------|---|
+| `tag`         | ✅        |                   | Docker image tag |
+| `file`        |           | `Dockerfile`      | Path to the Dockerfile |
+| `load`        |           | `Dockerfile`      | Path to the Dockerfile |
+| `context`     |           | `.`               | Docker build context |
+| `load`        |           | true              | If a newly built image is loaded into the local daemon |
+| `platform`    |           | `linux/amd64`     | Target platform |
+| `buildx-args` |           |                   | Additional arguments appended to `docker buildx build` |
 | `key` | | `<tag>-<platform>-<dockerfile-hash>` | Override the cache key |
-| `path` | | `/tmp/<key>.tar` | Override the cache file path |
+| `path`        |           | `/tmp/<key>.tar`  | Override the cache file path |
 
 ### `restore`
 
