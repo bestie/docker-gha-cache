@@ -113,7 +113,8 @@ jobs:
         with:
           tag: ${{ env.TAG }}
           file: tests/Dockerfile.args
-          buildx-args: --build-arg GREETING=ahoyhoy
+          buildx-args: |
+            --build-arg GREETING=ahoyhoy
 
   test-buildx-args-restore:
     name: Restore with and check buildx-args
