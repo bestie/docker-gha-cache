@@ -102,9 +102,8 @@ runs:
           --file "${{ inputs.file }}" \
           --tag "${{ inputs.tag }}" \
           --platform "${{ inputs.platform }}" \
-          --output "type=docker,dest=${{ steps.init.outputs.path }}" $local_output \
-          ${{ inputs.buildx-args }} \
-          "${{ inputs.context }}"
+          --output "type=docker,dest=${{ steps.init.outputs.path }}" \
+          $local_output ${{ inputs.buildx-args }} "${{ inputs.context }}"
 
     - name: Save Docker image to cache
       if: steps.cache-check.outputs.cache-hit != 'true'
