@@ -115,6 +115,7 @@ jobs:
           file: tests/Dockerfile.args
           buildx-args: |
             --build-arg GREETING=ahoyhoy
+            --build-arg RECIPIENT=matey
 
   test-buildx-args-restore:
     name: Restore with and check buildx-args
@@ -135,7 +136,7 @@ jobs:
         run: |
           result=$(docker run --rm ${{ env.TAG }})
           echo "Container output: $result"
-          echo "$result" | grep "ahoyhoy" || (echo "Expected 'ahoyhoy' in output" && exit 1)
+          echo "$result" | grep "ahoyhoy matey" || (echo "Expected 'ahoyhoy matey' in output" && exit 1)
           echo "buildx-args passed through correctly ✓"
 
   test-custom-key-path-build:

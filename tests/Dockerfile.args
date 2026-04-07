@@ -1,4 +1,5 @@
 FROM alpine:3.19
 ARG GREETING=hello
-RUN echo "${GREETING}" > greeting.txt
+ARG RECIPIENT
+RUN echo "${GREETING} ${RECIPIENT}" | sed 's/ $//' > greeting.txt
 CMD ["/bin/sh", "-c", "cat greeting.txt"]

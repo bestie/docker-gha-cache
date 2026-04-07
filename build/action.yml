@@ -98,12 +98,14 @@ runs:
           local_output='--output "type=docker"'
         fi
 
-        docker buildx build \
+        extra_args="$(echo "$localoutput\n${{ inputs.buildx-args }}")"
+
+        echo "$extra_args" | xargs -I{} docker buildx build \
           --file "${{ inputs.file }}" \
           --tag "${{ inputs.tag }}" \
           --platform "${{ inputs.platform }}" \
           --output "type=docker,dest=${{ steps.init.outputs.path }}" \
-          $local_output ${{ inputs.buildx-args }} "${{ inputs.context }}"
+          {} "${{ inputs.context }}"
 
     - name: Save Docker image to cache
       if: steps.cache-check.outputs.cache-hit != 'true'
