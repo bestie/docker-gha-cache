@@ -94,18 +94,24 @@ runs:
         mkdir -p $(dirname ${{ steps.init.outputs.path }})
 
         local_output=""
-        if [ "${{ inputs.load }}" == "true" ]; then
+        if [ "${{ inputs.load }}" = "true" ]; then
           local_output='--output "type=docker"'
         fi
 
-        extra_args="$(echo "$localoutput\n${{ inputs.buildx-args }}")"
+        user_args=""
+        while read line || [[ -n $line ]]; do
+          user_args="$user_args $line"
+        done <<< "${{ inputs.buildx-args }}"
 
-        echo "$extra_args" | xargs -I{} docker buildx build \
+        echo "Appending args from input:"
+        echo "$user_args"
+
+        docker buildx build \
           --file "${{ inputs.file }}" \
           --tag "${{ inputs.tag }}" \
           --platform "${{ inputs.platform }}" \
-          --output "type=docker,dest=${{ steps.init.outputs.path }}" \
-          {} "${{ inputs.context }}"
+          --output "type=docker,dest=${{ steps.init.outputs.path }}" $local_output \
+          $user_args "${{ inputs.context }}"
 
     - name: Save Docker image to cache
       if: steps.cache-check.outputs.cache-hit != 'true'

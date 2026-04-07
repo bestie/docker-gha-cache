@@ -86,7 +86,7 @@ jobs:
 
 ### Passing arbitrary arguments to `docker build`
 
-buildx-args is a string or list of strings that is appended as arguments to the `docker buildx build` command ran by the build action.
+buildx-args is a list of strings that is appended as arguments to the `docker buildx build` command ran by the build action.
 
 This should allow most aspects of the build to be customized.
 
@@ -95,7 +95,8 @@ Add secrets:
 - uses: bestie/docker-gha-cache/build@v1
   with:
     tag: myapp:latest
-    buildx-args: --secret id=npmrc,src=$HOME/.npmrc
+    buildx-args: |
+      --secret id=npmrc,src=$HOME/.npmrc
 ```
 
 Build args:
