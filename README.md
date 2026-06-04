@@ -1,4 +1,4 @@
-# docker-gha-cache
+# docker-gha-cache v1
 
 **Fast Docker image cache / restore**
 
@@ -31,7 +31,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Build or load from cache
         uses: bestie/docker-gha-cache/build@v1
@@ -53,7 +53,7 @@ jobs:
   build-docker-image:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Build and cache (skips on cache hit)
         uses: bestie/docker-gha-cache/build@v1
         with:
@@ -69,9 +69,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - name: Load Docker image 
+      - name: Load Docker image
         uses: bestie/docker-gha-cache/restore@v1
         with:
           tag: myapp:latest
