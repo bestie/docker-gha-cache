@@ -25,6 +25,8 @@ jobs:
           tag: ${{ env.TAG }}
           file: tests/Dockerfile
           load: false
+          prebuild: |
+            echo "prebuild ran" > /tmp/prebuild.txt
 
       - name: Assert cache-hit is false on first build
         run: |
@@ -45,6 +47,15 @@ jobs:
         run: |
           docker image ls
           docker image ls | grep test-image | wc -l | xargs test 0 -eq
+
+      - name: Assert prebuild command ran
+        run: |
+          if [ ! -f /tmp/prebuild.txt ]; then
+            echo "Expected prebuild command to run"
+            exit 1
+          fi
+          grep "prebuild ran" /tmp/prebuild.txt
+          echo "prebuild ran on cache miss ✓"
 
   test-restore:
     name: Restore cached image
@@ -90,6 +101,8 @@ jobs:
         with:
           tag: ${{ env.TAG }}
           file: tests/Dockerfile
+          prebuild: |
+            echo "prebuild ran" > /tmp/prebuild.txt
 
       - name: Assert cache-hit is true
         run: |
@@ -98,6 +111,14 @@ jobs:
             exit 1
           fi
           echo "cache-hit=true on repeat build ✓"
+
+      - name: Assert prebuild command skipped
+        run: |
+          if [ -f /tmp/prebuild.txt ]; then
+            echo "Expected prebuild command to have been skipped"
+            exit 1
+          fi
+          echo "prebuild skipped on cache hit ✓"
 
   test-buildx-args-build:
     name: Build with buildx-args
@@ -184,14 +205,14 @@ jobs:
       TAG: test-single-job:${{ github.run_id }}
     steps:
       - uses: actions/checkout@v6
- 
+
       - name: Build image (cache empty)
         id: build
         uses: ./build
         with:
           tag: ${{ env.TAG }}
           file: tests/Dockerfile
- 
+
       - name: Assert cache miss
         run: |
           if [ "${{ steps.build.outputs.cache-hit }}" == "false" ]; then
@@ -213,7 +234,7 @@ jobs:
       TAG: test-single-job:${{ github.run_id }}
     steps:
       - uses: actions/checkout@v6
- 
+
       - name: Check image is cached by restoring it
         uses: ./restore
         with:

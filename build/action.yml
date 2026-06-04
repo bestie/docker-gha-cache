@@ -35,6 +35,13 @@ inputs:
     description: Docker build context
     required: false
     default: .
+  prebuild:
+    description: >
+      Shell command to run just before 'docker buildx build'. 
+      Useful for authenticating with a remote container registry.
+      Runs after QEMU and docker buildx setup.
+      Does not run on cache hit.
+    required: false
 
 outputs:
   cache-hit:
@@ -86,6 +93,11 @@ runs:
     - name: Set up Docker Buildx
       if: steps.cache-check.outputs.cache-hit != 'true'
       uses: docker/setup-buildx-action@v4
+
+    - name: Prebuild
+      shell: bash
+      if: steps.cache-check.outputs.cache-hit != 'true' && inputs.prebuild != ''
+      run: ${{ inputs.prebuild }}
 
     - name: Build Docker image
       shell: bash

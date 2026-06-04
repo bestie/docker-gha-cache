@@ -109,6 +109,20 @@ Build args:
       --build-arg APP_VERSION=${{ github.sha }}
 ```
 
+### Authenticating to a private registry
+
+Pass your authentication command as the `prebuild` input parameter.
+It will be run just before docker buildx and skipped on cache hit.
+
+```yaml
+- uses: bestie/docker-gha-cache/build@v1
+  with:
+    tag: myapp:latest
+    prebuild: |
+      echo "${{ secrets.REGISTRY_PASSWORD }}" | \
+        docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+```
+
 ### Cross-platform builds
 
 Set the platform argument to change the target architecture, the following will build an arm64 image on an x86 runner.
@@ -150,6 +164,7 @@ For finer control over what triggers a rebuild, define your own cache key.
 | `load`        |           | true              | If a newly built image is loaded into the local daemon |
 | `platform`    |           | `linux/amd64`     | Target platform |
 | `buildx-args` |           |                   | Additional arguments appended to `docker buildx build` |
+| `prebuild`    |           |                   | Shell command run before the build (e.g. registry login) |
 | `key` | | `<tag>-<platform>-<dockerfile-hash>` | Override the cache key |
 | `path`        |           | `/tmp/<key>.tar`  | Override the cache file path |
 

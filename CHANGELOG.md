@@ -8,3 +8,4 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 - Initial release with `build` and `restore` composite actions
+- `prebuild` input on `build` — runs shell command(s) on cache miss only, before the build (e.g. registry login)
