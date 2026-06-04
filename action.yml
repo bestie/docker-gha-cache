@@ -1,0 +1,169 @@
+name: Docker Image Cache
+description: Build and cache Docker images as tar files, or restore them, via the native GitHub Actions cache
+
+branding:
+  icon: package
+  color: blue
+
+inputs:
+  mode:
+    description: >
+      'build' to build the image and save the tar to cache (skips on cache hit),
+      or 'restore' to load a previously cached image tar into Docker.
+    required: false
+    default: build
+  tag:
+    description: Docker image tag
+    required: true
+  key:
+    description: Cache key, see actions/cache
+    required: false
+  path:
+    description: Cache path, see actions/cache
+    required: false
+  platform:
+    description: Docker build platform
+    required: false
+    default: linux/amd64
+  file:
+    description: Dockerfile path. Also used to compute the default cache key.
+    required: false
+    default: Dockerfile
+  load:
+    description: >
+      Load into the local daemon so the image is immediately useable in the same job.
+      This is not the recommended pattern but is annoying gotcha.
+      Disable for best performance. Build mode only.
+    required: false
+    default: "true"
+  buildx-args:
+    description: >
+      Arbitrary arguments appended to the docker buildx build command,
+      e.g. '--build-arg FOO=bar --secret id=mysecret,src=secret.txt'. Build mode only.
+    required: false
+  context:
+    description: Docker build context. Build mode only.
+    required: false
+    default: .
+  prebuild:
+    description: >
+      Shell command to run just before 'docker buildx build'.
+      Useful for authenticating with a remote container registry.
+      Runs after QEMU and docker buildx setup.
+      Does not run on cache hit. Build mode only.
+    required: false
+
+outputs:
+  cache-hit:
+    description: If image was present in cache, see actions/cache.
+    value: ${{ steps.cache-check.outputs.cache-hit || steps.restore.outputs.cache-hit }}
+  path:
+    description: Cache path used for the image tar file.
+    value: ${{ steps.init.outputs.path }}
+  key:
+    description: Cache key used for the image tar file.
+    value: ${{ steps.init.outputs.key }}
+
+runs:
+  using: composite
+  steps:
+    - name: Validate mode
+      shell: bash
+      if: inputs.mode != 'build' && inputs.mode != 'restore'
+      run: |
+        echo "::error::Invalid mode '${{ inputs.mode }}'. Must be 'build' or 'restore'."
+        exit 1
+
+    - name: Prepare
+      id: init
+      shell: bash
+      run: |
+        default_key="${{ inputs.tag }}-${{ inputs.platform }}-${{ hashFiles(inputs.file) }}"
+        input_key="${{ inputs.key }}"
+        key=${input_key:-$default_key}
+
+        default_path="/tmp/$key.tar"
+        input_path="${{ inputs.path }}"
+        path=${input_path:-$default_path}
+
+        echo "key=$key" >> $GITHUB_OUTPUT
+        echo "path=$path" >> $GITHUB_OUTPUT
+
+    # --- Build mode ---
+
+    - name: Check Docker image cache
+      if: inputs.mode == 'build'
+      uses: actions/cache@v5
+      id: cache-check
+      with:
+        path: ${{ steps.init.outputs.path }}
+        key: ${{ steps.init.outputs.key }}
+        lookup-only: true
+
+    # QEMU is only needed when building for a platform different from the runner's native arch
+    - name: Set up QEMU
+      if: inputs.mode == 'build' && steps.cache-check.outputs.cache-hit != 'true' && (
+        (inputs.platform == 'linux/amd64' && runner.arch != 'X64') ||
+        (inputs.platform == 'linux/arm64' && runner.arch != 'ARM64')
+        )
+      uses: docker/setup-qemu-action@v4
+      with:
+        platforms: ${{ inputs.platform }}
+
+    - name: Set up Docker Buildx
+      if: inputs.mode == 'build' && steps.cache-check.outputs.cache-hit != 'true'
+      uses: docker/setup-buildx-action@v4
+
+    - name: Prebuild
+      shell: bash
+      if: inputs.mode == 'build' && steps.cache-check.outputs.cache-hit != 'true' && inputs.prebuild != ''
+      run: ${{ inputs.prebuild }}
+
+    - name: Build Docker image
+      shell: bash
+      if: inputs.mode == 'build' && steps.cache-check.outputs.cache-hit != 'true'
+      run: |
+        mkdir -p $(dirname ${{ steps.init.outputs.path }})
+
+        local_output=""
+        if [ "${{ inputs.load }}" = "true" ]; then
+          local_output='--output "type=docker"'
+        fi
+
+        user_args=""
+        while read line || [[ -n $line ]]; do
+          user_args="$user_args $line"
+        done <<< "${{ inputs.buildx-args }}"
+
+        echo "Appending args from input:"
+        echo "$user_args"
+
+        docker buildx build \
+          --file "${{ inputs.file }}" \
+          --tag "${{ inputs.tag }}" \
+          --platform "${{ inputs.platform }}" \
+          --output "type=docker,dest=${{ steps.init.outputs.path }}" $local_output \
+          $user_args "${{ inputs.context }}"
+
+    - name: Save Docker image to cache
+      if: inputs.mode == 'build' && steps.cache-check.outputs.cache-hit != 'true'
+      uses: actions/cache@v5
+      with:
+        path: ${{ steps.init.outputs.path }}
+        key: ${{ steps.init.outputs.key }}
+
+    # --- Restore mode ---
+
+    - name: Restore image
+      id: restore
+      if: inputs.mode == 'restore'
+      uses: actions/cache/restore@v5
+      with:
+        path: ${{ steps.init.outputs.path }}
+        key: ${{ steps.init.outputs.key }}
+        fail-on-cache-miss: true
+
+    - name: Load Docker image
+      shell: bash
+      if: inputs.mode == 'restore'
+      run: docker load --input "${{ steps.init.outputs.path }}"

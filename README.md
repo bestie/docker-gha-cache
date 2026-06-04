@@ -4,25 +4,68 @@
 
 Composite GitHub Action for caching Docker image builds using the native [actions/cache](https://github.com/actions/cache) backend.
 
-Split into two actions, build and restore, to allow for fast, skippable, parallelizable build jobs that can run before your main jobs.
+Available as a single unified action with a `mode` input, or as two focused actions (`build` and `restore`), to allow for fast, skippable, parallelizable build jobs that can run before your main jobs.
 
 ---
 
 ## Actions
 
+### `bestie/docker-gha-cache` (unified)
+
+A single action that does either job, selected by the `mode` input:
+
+* `mode: build` (default) — builds a Docker image and saves it to the local cache. Skips the Docker build entirely on cache hit, making it fast to run every time.
+* `mode: restore` — loads a cached image into Docker. Fails on cache miss, requires a prior `build` to have populated the cache.
+
+This is the recommended entry point and the one published to the GitHub Marketplace.
+
 ### `bestie/docker-gha-cache/build`
 
 * Builds a Docker image and saves it to the local cache.
 * Skips the Docker build entirely on cache hit, making it fast to run every time.
+* Equivalent to the unified action with `mode: build`.
 
 ### `bestie/docker-gha-cache/restore`
 
 * Loads a cached image into Docker.
 * Fails on cache miss, requires the build action already skipped/succeeded.
+* Equivalent to the unified action with `mode: restore`.
 
 ---
 
 ## Usage
+
+### Unified action
+
+The same action handles both jobs via the `mode` input. `mode` defaults to `build`.
+
+```yaml
+jobs:
+  build-docker-image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build and cache (skips on cache hit)
+        uses: bestie/docker-gha-cache@v1
+        with:
+          tag: myapp:latest
+          load: false
+
+  compile:
+    needs: build-docker-image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Load Docker image
+        uses: bestie/docker-gha-cache@v1
+        with:
+          mode: restore
+          tag: myapp:latest
+      - name: Compile
+        run: docker run myapp:latest -v $(pwd):/workdir make
+```
+
+All `build` inputs below also apply to the unified action in `build` mode. The split `build`/`restore` actions documented below remain available and unchanged.
 
 ### Basic Single Job setup
 
@@ -153,15 +196,22 @@ For finer control over what triggers a rebuild, define your own cache key.
 
 ## Inputs
 
+### unified action
+
+The unified action accepts every `build` input below, plus:
+
+| Input  | Required | Default | Description |
+|--------|----------|---------|---|
+| `mode` |          | `build` | `build` to build and cache the image, or `restore` to load a cached image. In `restore` mode the build-only inputs (`load`, `buildx-args`, `context`, `prebuild`) are ignored. |
+
 ### `build`
 
 | Input         | Required  | Default           | Description |
 |-------------- |-----------|-------------------|---|
 | `tag`         | ✅        |                   | Docker image tag |
 | `file`        |           | `Dockerfile`      | Path to the Dockerfile |
-| `load`        |           | `Dockerfile`      | Path to the Dockerfile |
 | `context`     |           | `.`               | Docker build context |
-| `load`        |           | true              | If a newly built image is loaded into the local daemon |
+| `load`        |           | `true`            | If a newly built image is loaded into the local daemon |
 | `platform`    |           | `linux/amd64`     | Target platform |
 | `buildx-args` |           |                   | Additional arguments appended to `docker buildx build` |
 | `prebuild`    |           |                   | Shell command run before the build (e.g. registry login) |
@@ -181,6 +231,8 @@ For finer control over what triggers a rebuild, define your own cache key.
 ---
 
 ## Outputs
+
+The unified action exposes the same outputs as `build` (`cache-hit`, `key`, `path`) in both modes.
 
 ### `build`
 

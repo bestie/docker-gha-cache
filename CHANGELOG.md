@@ -9,3 +9,4 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ### Added
 - Initial release with `build` and `restore` composite actions
 - `prebuild` input on `build` — runs shell command(s) on cache miss only, before the build (e.g. registry login)
+- Unified root action (`bestie/docker-gha-cache`) with a `mode: build | restore` input, combining both actions into a single Marketplace-publishable entry point. The split `build`/`restore` actions remain available and unchanged.

@@ -240,3 +240,91 @@ jobs:
         with:
           tag: ${{ env.TAG }}
           file: tests/Dockerfile
+
+  # --- Unified root action (mode: build | restore) ---
+
+  test-unified-build:
+    name: Unified action build (cache miss)
+    runs-on: ubuntu-latest
+    env:
+      TAG: test-unified:${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Build via root action (default mode)
+        id: build
+        uses: ./
+        with:
+          tag: ${{ env.TAG }}
+          file: tests/Dockerfile
+          load: false
+
+      - name: Assert cache-hit is false on first build
+        run: |
+          if [ "${{ steps.build.outputs.cache-hit }}" = "true" ]; then
+            echo "Expected cache-hit=false on a fresh build, got true"
+            exit 1
+          fi
+          echo "cache-hit=false ✓"
+
+      - name: Assert outputs are populated
+        run: |
+          [ -n "${{ steps.build.outputs.key }}" ]  || (echo "key output is empty"  && exit 1)
+          [ -n "${{ steps.build.outputs.path }}" ] || (echo "path output is empty" && exit 1)
+          echo "key=${{ steps.build.outputs.key }} ✓"
+          echo "path=${{ steps.build.outputs.path }} ✓"
+
+  test-unified-restore:
+    name: Unified action restore
+    needs: test-unified-build
+    runs-on: ubuntu-latest
+    env:
+      TAG: test-unified:${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Restore via root action
+        id: restore
+        uses: ./
+        with:
+          mode: restore
+          tag: ${{ env.TAG }}
+          file: tests/Dockerfile
+
+      - name: Assert cache-hit is true
+        run: |
+          if [ "${{ steps.restore.outputs.cache-hit }}" != "true" ]; then
+            echo "Expected cache-hit=true after build job, got false"
+            exit 1
+          fi
+          echo "cache-hit=true ✓"
+
+      - name: Assert image is loaded and runnable
+        run: |
+          docker run --rm ${{ env.TAG }} echo "hello from unified cache" | grep "hello from unified cache"
+          echo "image runs correctly ✓"
+
+  test-unified-invalid-mode:
+    name: Unified action rejects invalid mode
+    runs-on: ubuntu-latest
+    env:
+      TAG: test-unified-bad:${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Call root action with an invalid mode
+        id: bad
+        continue-on-error: true
+        uses: ./
+        with:
+          mode: bogus
+          tag: ${{ env.TAG }}
+          file: tests/Dockerfile
+
+      - name: Assert the action failed
+        run: |
+          if [ "${{ steps.bad.outcome }}" != "failure" ]; then
+            echo "Expected invalid mode to fail the action, got '${{ steps.bad.outcome }}'"
+            exit 1
+          fi
+          echo "invalid mode rejected ✓"
