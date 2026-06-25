@@ -73,7 +73,7 @@ runs:
         echo "path=$path" >> $GITHUB_OUTPUT
 
     - name: Check Docker image cache
-      uses: actions/cache@v5
+      uses: actions/cache@v6
       id: cache-check
       with:
         path: ${{ steps.init.outputs.path }}
@@ -127,7 +127,7 @@ runs:
 
     - name: Save Docker image to cache
       if: steps.cache-check.outputs.cache-hit != 'true'
-      uses: actions/cache@v5
+      uses: actions/cache@v6
       with:
         path: ${{ steps.init.outputs.path }}
         key: ${{ steps.init.outputs.key }}

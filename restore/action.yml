@@ -45,7 +45,7 @@ runs:
 
     - name: Restore image
       id: restore
-      uses: actions/cache/restore@v5
+      uses: actions/cache/restore@v6
       with:
         path: ${{ steps.init.outputs.path }}
         key: ${{ steps.init.outputs.key }}
